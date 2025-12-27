@@ -1,0 +1,514 @@
+{
+  "name": "DAG GPT - AI Social Media Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "create-social-campaign",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Create Campaign",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "dag-gpt-social-automation"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.body.url}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-website",
+      "name": "HTTP Request - Fetch Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract text content from HTML\nconst html = $input.first().json.data || '';\nconst cheerio = require('cheerio');\nconst $ = cheerio.load(html);\n\nconst brandData = {\n  url: $json.body.url,\n  title: $('title').text() || '',\n  metaDescription: $('meta[name=\"description\"]').attr('content') || $('meta[property=\"og:description\"]').attr('content') || '',\n  bodyText: $('body').text().replace(/\\s+/g, ' ').trim().slice(0, 15000),\n  headings: []\n};\n\n$('h1, h2, h3').each((i, el) => {\n  if (i < 10) brandData.headings.push($(el).text().trim());\n});\n\nreturn { json: brandData };"
+      },
+      "id": "extract-brand-data",
+      "name": "Code - Extract Brand Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build comprehensive LLM prompt\nconst brandData = $input.first().json;\n\nconst brandContext = `Website URL: ${brandData.url}\nTitle: ${brandData.title}\nMeta: ${brandData.metaDescription}\nHeadings: ${brandData.headings.join(', ')}\n\nPage Content:\n${brandData.bodyText}`;\n\nconst prompt = `You are a senior social media content strategist and UGC copywriter.\n\nInput: ${brandContext}\n\nTask:\n1) Create a brand profile with:\n   - Brand tone (3 descriptive words)\n   - 3 core selling points\n   - Target audience segments\n   - 3 brand voice examples\n\n2) Generate 14 days of UGC-style social media content optimized for:\n   - Instagram (engaging captions with hashtags)\n   - Facebook (community-focused posts)\n   - X/Twitter (concise, impactful tweets under 280 chars)\n   - TikTok (trendy captions with video concepts)\n\nFor each day, provide:\n{\n  \"day\": number,\n  \"platformVariants\": {\n    \"instagram\": {\n      \"caption\": \"engaging caption\",\n      \"hashtags\": [\"relevant\", \"hashtags\"],\n      \"suggested_image_prompt\": \"detailed image generation prompt\"\n    },\n    \"facebook\": {\n      \"post\": \"community-focused post text\"\n    },\n    \"x\": {\n      \"tweet\": \"concise tweet under 280 chars\"\n    },\n    \"tiktok\": {\n      \"caption\": \"trendy caption\",\n      \"video_prompt\": \"video concept description\",\n      \"sound_suggestion\": \"trending sound or music type\"\n    }\n  },\n  \"call_to_action\": \"clear CTA\",\n  \"suggested_post_time\": \"HH:MM UTC\",\n  \"content_type\": \"image|video|carousel|reel\",\n  \"mood\": [\"word1\", \"word2\", \"word3\"]\n}\n\nBe creative, authentic, and brand-specific. Return ONLY valid JSON with keys: brand_profile, posts (array of 14 items).`;\n\nreturn { json: { prompt, brandData } };"
+      },
+      "id": "build-prompt",
+      "name": "Code - Build LLM Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a senior social media strategist and UGC content creator. Always respond with valid JSON only."
+            },
+            {
+              "role": "user",
+              "content": "={{$json.prompt}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 4000
+        }
+      },
+      "id": "openai-generate",
+      "name": "OpenAI - Generate Content",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.3,
+      "position": [1250, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse OpenAI response\nconst aiOutput = $input.first().json.message?.content || $input.first().json.text || '';\n\nlet campaignData;\ntry {\n  campaignData = JSON.parse(aiOutput);\n} catch (e) {\n  const jsonMatch = aiOutput.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try {\n      campaignData = JSON.parse(jsonMatch[0]);\n    } catch (e2) {\n      throw new Error('Failed to parse AI response');\n    }\n  } else {\n    throw new Error('No JSON found in response');\n  }\n}\n\n// Add metadata\ncampaignData.campaign_id = `campaign_${Date.now()}`;\ncampaignData.created_at = new Date().toISOString();\ncampaignData.website_url = $node['Code - Build LLM Prompt'].json.brandData.url;\n\nreturn { json: campaignData };"
+      },
+      "id": "parse-response",
+      "name": "Code - Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "save-to-sheets",
+      "name": "Google Sheets - Save Campaign",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1750, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'success', message: 'Campaign created successfully', campaign_id: $json.campaign_id, posts_generated: $json.posts.length } }}"
+      },
+      "id": "respond-success",
+      "name": "Respond - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-daily",
+      "name": "Schedule - Daily Poster",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 700]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "id": "read-content",
+      "name": "Google Sheets - Read Content",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [500, 700],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find next unposted content\nconst rows = $input.all();\nlet nextPost = null;\n\nfor (const item of rows) {\n  const posted = item.json.posted === 'TRUE' || item.json.posted === true;\n  if (!posted) {\n    nextPost = item.json;\n    break;\n  }\n}\n\nif (!nextPost) {\n  throw new Error('No unposted content found');\n}\n\nreturn { json: nextPost };"
+      },
+      "id": "pick-next",
+      "name": "Code - Pick Next Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 700]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "page",
+        "operation": "create",
+        "pageId": "REPLACE_WITH_FACEBOOK_PAGE_ID",
+        "message": "={{$json.platformVariants.facebook.post}}"
+      },
+      "id": "post-facebook",
+      "name": "Facebook - Post",
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1.1,
+      "position": [1000, 600],
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "REPLACE_WITH_FACEBOOK_CREDENTIAL_ID",
+          "name": "Facebook Graph API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "text": "={{$json.platformVariants.x.tweet}}"
+      },
+      "id": "post-twitter",
+      "name": "X (Twitter) - Post",
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [1000, 800],
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "REPLACE_WITH_TWITTER_CREDENTIAL_ID",
+          "name": "X (Twitter) OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/REPLACE_IG_ACCOUNT_ID/media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "instagramGraphApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "caption",
+              "value": "={{$json.platformVariants.instagram.caption}}"
+            },
+            {
+              "name": "image_url",
+              "value": "={{$json.image_url || 'PLACEHOLDER_IMAGE_URL'}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "post-instagram",
+      "name": "Instagram - Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 600],
+      "credentials": {
+        "instagramGraphApi": {
+          "id": "REPLACE_WITH_INSTAGRAM_CREDENTIAL_ID",
+          "name": "Instagram Graph API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "tiktokApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "post_info",
+              "value": "={{ { title: $json.platformVariants.tiktok.caption, description: $json.platformVariants.tiktok.video_prompt } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "post-tiktok",
+      "name": "TikTok - Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark as posted\nreturn {\n  json: {\n    row_id: $json.row_id || $json.id,\n    posted: 'TRUE',\n    posted_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "mark-posted",
+      "name": "Code - Mark Posted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 700]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {}
+      },
+      "id": "update-sheet",
+      "name": "Google Sheets - Update Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1750, 700],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Create Campaign": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Fetch Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Fetch Website": {
+      "main": [
+        [
+          {
+            "node": "Code - Extract Brand Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extract Brand Data": {
+      "main": [
+        [
+          {
+            "node": "Code - Build LLM Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Build LLM Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Generate Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Generate Content": {
+      "main": [
+        [
+          {
+            "node": "Code - Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Save Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Save Campaign": {
+      "main": [
+        [
+          {
+            "node": "Respond - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule - Daily Poster": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Content": {
+      "main": [
+        [
+          {
+            "node": "Code - Pick Next Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Pick Next Post": {
+      "main": [
+        [
+          {
+            "node": "Facebook - Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "X (Twitter) - Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Instagram - Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TikTok - Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facebook - Post": {
+      "main": [
+        [
+          {
+            "node": "Code - Mark Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "X (Twitter) - Post": {
+      "main": [
+        [
+          {
+            "node": "Code - Mark Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram - Post": {
+      "main": [
+        [
+          {
+            "node": "Code - Mark Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TikTok - Post": {
+      "main": [
+        [
+          {
+            "node": "Code - Mark Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Mark Posted": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2025-01-11T08:38:00.000Z",
+  "versionId": "1"
+}

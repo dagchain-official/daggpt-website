@@ -1,0 +1,638 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { generateWebsite, downloadHTML, extractTitle } from '../services/websiteBuilderService';
+
+const WebsiteBuilder = () => {
+  const [prompt, setPrompt] = useState('');
+  const [generatedHTML, setGeneratedHTML] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [status, setStatus] = useState('');
+  const [viewMode, setViewMode] = useState('code'); // 'preview' or 'code' - default to split view
+  const [isMobileView, setIsMobileView] = useState(false);
+  const iframeRef = useRef(null);
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      alert('Please enter a website description');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGeneratedHTML('');
+    setStatus('Starting generation...');
+
+    const result = await generateWebsite(prompt, (update) => {
+      if (update.type === 'status') {
+        setStatus(update.content);
+      } else if (update.type === 'code') {
+        setGeneratedHTML(update.content);
+        // Update iframe in real-time
+        if (iframeRef.current && update.content) {
+          const iframeDoc = iframeRef.current.contentDocument;
+          if (iframeDoc) {
+            iframeDoc.open();
+            iframeDoc.write(update.content);
+            iframeDoc.close();
+          }
+        }
+      } else if (update.type === 'error') {
+        setStatus(update.content);
+      }
+    });
+
+    setIsGenerating(false);
+
+    if (result.success) {
+      setGeneratedHTML(result.html);
+      setStatus('✅ Website ready!');
+    }
+  };
+
+  const handleDownload = () => {
+    if (generatedHTML) {
+      const title = extractTitle(generatedHTML);
+      const filename = title.toLowerCase().replace(/\s+/g, '-') + '.html';
+      downloadHTML(generatedHTML, filename);
+    }
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(generatedHTML);
+    alert('Code copied to clipboard!');
+  };
+
+  const handleNewWebsite = () => {
+    setGeneratedHTML('');
+    setPrompt('');
+    setStatus('');
+    setViewMode('preview');
+  };
+
+  // Example prompts
+  const examplePrompts = [
+    "Build me a landing page for a Coffee store with a hero section, menu, and contact form",
+    "Create a portfolio website for a photographer with a gallery and about section",
+    "Design a modern SaaS landing page with pricing tiers and feature highlights",
+    "Make a restaurant website with menu, reservations, and location map"
+  ];
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      backgroundColor: '#0a0a0a',
+      color: '#ffffff'
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '20px 30px',
+        borderBottom: '1px solid #333',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#111'
+      }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
+            🌐 Website Builder
+          </h1>
+          <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#888' }}>
+            Powered by Claude Sonnet 4.5
+          </p>
+        </div>
+        {generatedHTML && (
+          <button
+            onClick={handleNewWebsite}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#ff6b35',
+
+        {/* Chat Messages Area */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '20px'
+        }}>
+          {!generatedHTML ? (
+            <div>
+              <p style={{
+                fontSize: '14px',
+                color: '#888',
+                marginBottom: '20px'
+              }}>
+                Describe your dream website and watch it come to life in real-time.
+              </p>
+              <p style={{
+                fontSize: '14px',
+                color: '#888',
+                marginBottom: '20px'
+              }}>
+                Tell me what kind of website you want to build, and I'll create it for you with beautiful design and smooth interactions.
+              </p>
+
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Example: Build me a landing page for a Coffee store with a hero section, menu showcase, and contact form..."
+                style={{
+                  width: '100%',
+                  minHeight: '150px',
+                  padding: '20px',
+                  backgroundColor: '#0a0a0a',
+                  border: '2px solid #333',
+                  borderRadius: '12px',
+                  color: '#ffffff',
+                  fontSize: '16px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  marginBottom: '20px',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#ff6b35'}
+                onBlur={(e) => e.target.style.borderColor = '#333'}
+              />
+
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating || !prompt.trim()}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  backgroundColor: isGenerating ? '#555' : '#ff6b35',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {isGenerating ? '🎨 Generating...' : '✨ Generate Website'}
+              </button>
+
+              {status && (
+                <div style={{
+                  marginTop: '20px',
+                  padding: '15px',
+                  backgroundColor: '#0a0a0a',
+                  borderRadius: '8px',
+                  border: '1px solid #333',
+                  color: '#ff6b35',
+                  textAlign: 'center'
+                }}>
+                  {status}
+                </div>
+              )}
+
+              {/* Example Prompts */}
+              <div style={{ marginTop: '40px' }}>
+                <h3 style={{ fontSize: '16px', color: '#888', marginBottom: '15px' }}>
+                  💡 Example prompts:
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {examplePrompts.map((example, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setPrompt(example)}
+                      style={{
+                        padding: '12px 16px',
+                        backgroundColor: '#0a0a0a',
+                        border: '1px solid #333',
+                        borderRadius: '8px',
+                        color: '#ccc',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.borderColor = '#ff6b35';
+                        e.target.style.backgroundColor = '#1a1a1a';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.borderColor = '#333';
+                        e.target.style.backgroundColor = '#0a0a0a';
+                      }}
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <button
+                onClick={handleNewWebsite}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#ff6b35',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600'
+                }}
+              >
+                ✨ New Website
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT PANEL - Preview */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#0a0a0a'
+      }}>
+        {/* Toolbar */}
+        <div style={{
+          padding: '12px 20px',
+          borderBottom: '1px solid #333',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={() => setViewMode('code')}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: viewMode === 'code' ? '#ff6b35' : 'transparent',
+                color: viewMode === 'code' ? 'white' : '#888',
+                border: '1px solid ' + (viewMode === 'code' ? '#ff6b35' : '#444'),
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s'
+              }}
+            >
+              💻 Code
+            </button>
+            <button
+              onClick={() => setViewMode('preview')}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: viewMode === 'preview' ? '#ff6b35' : 'transparent',
+                color: viewMode === 'preview' ? 'white' : '#888',
+                border: '1px solid ' + (viewMode === 'preview' ? '#ff6b35' : '#444'),
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.2s'
+              }}
+            >
+              👁️ Preview Only
+            </button>
+            {viewMode === 'preview' && (
+              <button
+                onClick={() => setIsMobileView(!isMobileView)}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: isMobileView ? '#ff6b35' : 'transparent',
+                  color: isMobileView ? 'white' : '#888',
+                  border: '1px solid ' + (isMobileView ? '#ff6b35' : '#444'),
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500'
+                }}
+              >
+                📱 Mobile
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleCopyCode}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: 'transparent',
+                color: '#888',
+                border: '1px solid #444',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500'
+              }}
+            >
+              📋 Copy
+            </button>
+            <button
+              onClick={handleDownload}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+            >
+              💾 Download
+            </button>
+          </div>
+        </div>
+
+        {/* Preview Area */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '20px'
+        }}>
+          {viewMode === 'preview' ? (
+            <iframe
+              ref={iframeRef}
+              frameBorder="0"
+              width="100%"
+              height="100%"
+              placeholder="Example: Build me a landing page for a Coffee store with a hero section, menu showcase, and contact form..."
+              style={{
+                width: '100%',
+                minHeight: '150px',
+                padding: '20px',
+                backgroundColor: '#0a0a0a',
+                border: '2px solid #333',
+                borderRadius: '12px',
+                color: '#ffffff',
+                fontSize: '16px',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+                marginBottom: '20px',
+                outline: 'none'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#ff6b35'}
+              onBlur={(e) => e.target.style.borderColor = '#333'}
+            />
+
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating || !prompt.trim()}
+              style={{
+                width: '100%',
+                padding: '16px',
+                backgroundColor: isGenerating ? '#555' : '#ff6b35',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: isGenerating ? 'not-allowed' : 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {isGenerating ? '🎨 Generating...' : '✨ Generate Website'}
+            </button>
+
+            {status && (
+              <div style={{
+                marginTop: '20px',
+                padding: '15px',
+                backgroundColor: '#0a0a0a',
+                borderRadius: '8px',
+                border: '1px solid #333',
+                color: '#ff6b35',
+                textAlign: 'center'
+              }}>
+                {status}
+              </div>
+            )}
+
+            {/* Example Prompts */}
+            <div style={{ marginTop: '40px' }}>
+              <h3 style={{ fontSize: '16px', color: '#888', marginBottom: '15px' }}>
+                💡 Example prompts:
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {examplePrompts.map((example, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setPrompt(example)}
+                    style={{
+                      padding: '12px 16px',
+                      backgroundColor: '#0a0a0a',
+                      border: '1px solid #333',
+                      borderRadius: '8px',
+                      color: '#ccc',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.borderColor = '#ff6b35';
+                      e.target.style.backgroundColor = '#1a1a1a';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.borderColor = '#333';
+                      e.target.style.backgroundColor = '#0a0a0a';
+                    }}
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Preview/Code Phase
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* Toolbar - Lovable Style */}
+          <div style={{
+            padding: '12px 20px',
+            backgroundColor: '#1a1a1a',
+            borderBottom: '1px solid #333',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                onClick={() => setViewMode('code')}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: viewMode === 'code' ? '#ff6b35' : 'transparent',
+                  color: viewMode === 'code' ? 'white' : '#888',
+                  border: '1px solid ' + (viewMode === 'code' ? '#ff6b35' : '#444'),
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+              >
+                💻 Code
+              </button>
+              <button
+                onClick={() => setViewMode('preview')}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: viewMode === 'preview' ? '#ff6b35' : 'transparent',
+                  color: viewMode === 'preview' ? 'white' : '#888',
+                  border: '1px solid ' + (viewMode === 'preview' ? '#ff6b35' : '#444'),
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+              >
+                👁️ Preview Only
+              </button>
+              {viewMode === 'preview' && (
+                <button
+                  onClick={() => setIsMobileView(!isMobileView)}
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: isMobileView ? '#ff6b35' : 'transparent',
+                    color: isMobileView ? 'white' : '#888',
+                    border: '1px solid ' + (isMobileView ? '#ff6b35' : '#444'),
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '500'
+                  }}
+                >
+                  📱 Mobile
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={handleCopyCode}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: 'transparent',
+                  color: '#888',
+                  border: '1px solid #444',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500'
+                }}
+              >
+                📋 Copy
+              </button>
+              <button
+                onClick={handleDownload}
+                style={{
+                  padding: '6px 14px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600'
+                }}
+              >
+                💾 Download
+              </button>
+            </div>
+          </div>
+
+          {/* Content Area - Split View */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', backgroundColor: '#0a0a0a' }}>
+            {viewMode === 'preview' ? (
+              // Preview Only
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                padding: '20px',
+                overflow: 'auto'
+              }}>
+                <iframe
+                  ref={iframeRef}
+                  title="Website Preview"
+                  style={{
+                    width: isMobileView ? '375px' : '100%',
+                    height: isMobileView ? '667px' : '100%',
+                    minHeight: '600px',
+                    border: isMobileView ? '8px solid #333' : 'none',
+                    borderRadius: isMobileView ? '20px' : '0',
+                    backgroundColor: 'white',
+                    boxShadow: isMobileView ? '0 10px 40px rgba(0,0,0,0.5)' : 'none'
+                  }}
+                  srcDoc={generatedHTML}
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              </div>
+            ) : (
+              // Split View: Code + Preview
+              <>
+                {/* Code Editor */}
+                <div style={{
+                  flex: 1,
+                  overflow: 'auto',
+                  borderRight: '1px solid #333'
+                }}>
+                  <pre style={{
+                    margin: 0,
+                    padding: '30px',
+                    backgroundColor: '#0a0a0a',
+                    color: '#e0e0e0',
+                    fontSize: '13px',
+                    fontFamily: 'Monaco, Consolas, monospace',
+                    lineHeight: '1.6',
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                    minHeight: '100%'
+                  }}>
+                    {generatedHTML || '// Code will appear here...'}
+                  </pre>
+                </div>
+                
+                {/* Live Preview */}
+                <div style={{
+                  flex: 1,
+                  overflow: 'auto',
+                  backgroundColor: '#1a1a1a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {generatedHTML ? (
+                    <iframe
+                      ref={iframeRef}
+                      title="Live Preview"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        backgroundColor: 'white'
+                      }}
+                      srcDoc={generatedHTML}
+                      sandbox="allow-scripts allow-same-origin"
+                    />
+                  ) : (
+                    <div style={{ color: '#666', fontSize: '14px' }}>
+                      Preview will appear here...
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default WebsiteBuilder;

@@ -1,0 +1,11 @@
+{
+  "note": "Add these dependencies to your package.json",
+  "dependencies_to_add": {
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.1",
+    "fluent-ffmpeg": "^2.1.2"
+  },
+  "devDependencies_to_add": {
+    "ffmpeg-static": "^5.2.0"
+  }
+}

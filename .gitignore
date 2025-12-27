@@ -1,0 +1,61 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+.vercel
+
+# Environment variables - NEVER commit these!
+.env
+.env.*
+!.env.example
+.env.production
+.env.vercel
+
+# Supabase
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
+
+# API keys and secrets
+*.key
+*.pem
+secrets/
+config/secrets.json
+
+# Markdown files with sensitive information
+ADD_MISSING_ENV_VARS.md
+VERCEL_ENV_SETUP.md
+TOKEN_LIMIT_FIX.md
+WEBSITE_BUILDER_INTEGRATIONS.md
+GROK_4_UPGRADE.md
+CLAUDE_SETUP.md
+SOCIAL_MEDIA_AUTOMATION_SETUP.md
+TESTING_GUIDE.md
+SOCIAL_MEDIA_QUICK_START.md
+GROK_WEBSITE_BUILDER.md
+BOLT_SETUP_GUIDE.md
+BOLT_QUICK_START.md
+BOLT_CLAUDE_INTEGRATION.md
+SUPABASE_INTEGRATION.md
+*_SETUP.md
+*_ENV_*.md
+*_GUIDE.md
+*_INTEGRATION.md
