@@ -22,6 +22,11 @@ yarn-error.log*
 
 .vercel
 
+# Logs and test outputs
+logs/
+*.log
+*.txt
+
 # Environment variables - NEVER commit these!
 .env
 .env.*
